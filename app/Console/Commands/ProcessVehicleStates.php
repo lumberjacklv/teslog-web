@@ -226,9 +226,11 @@ class ProcessVehicleStates extends Command
         &$parkedSince = null,
         bool &$gearStuck = false,
     ): void {
-        // For charging detection, also match states where charger_power > 1 kW
-        // Tesla API sometimes reports state=idle with charge_state values like
-        // QualifyLineConfig, Enable, Startup while actively charging
+        // For charging detection, also match states where charger_power > 1 kW.
+        // Tesla Fleet Telemetry sometimes reports charge_state='Idle' for the
+        // bulk of an active Supercharger session while charger_power stays
+        // >100 kW, so the realtime state may not be 'charging' even though
+        // the car is actively drawing power.
         $isMatch = $state->state === $targetState
             || ($targetState === 'charging' && $state->charger_power && $state->charger_power > 1);
 
@@ -478,6 +480,25 @@ class ProcessVehicleStates extends Command
         $maxPower = $states->max('charger_power');
 
         if (! $batteryIncreased && $climateOnThroughout && $maxPower < 5) {
+            return;
+        }
+
+        // Discard phantom sessions where the car briefly entered an active
+        // charge_state (e.g. 'Enable') during a handshake but no energy was
+        // actually transferred. Both deltas must be known (non-null) and
+        // <= 0 to discard; if battery_level or energy_remaining is missing
+        // at the boundary, we can't prove phantom and keep the session.
+        $batteryDelta = ($first->battery_level !== null && $last->battery_level !== null)
+            ? $last->battery_level - $first->battery_level
+            : null;
+        $energyDelta = ($first->energy_remaining !== null && $last->energy_remaining !== null)
+            ? $last->energy_remaining - $first->energy_remaining
+            : null;
+
+        $batteryFlat = $batteryDelta !== null && $batteryDelta <= 0;
+        $energyFlat = $energyDelta !== null && $energyDelta <= 0;
+
+        if ($batteryFlat && $energyFlat) {
             return;
         }
 

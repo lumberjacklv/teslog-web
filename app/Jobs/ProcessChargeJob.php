@@ -44,26 +44,37 @@ class ProcessChargeJob implements ShouldQueue
             return;
         }
 
-        // Find the last non-charging state before this charging block
-        $lastNonCharging = VehicleState::where('vehicle_id', $this->vehicleId)
-            ->where('timestamp', '<', $lastCharging->timestamp)
-            ->where('state', '!=', 'charging')
-            ->orderByDesc('timestamp')
-            ->first();
-
-        $lookbackStart = $lastNonCharging?->timestamp ?? $lastCharging->timestamp->copy()->subHours(24);
-
-        // Get all charging states in this session
-        $chargingStates = VehicleState::where('vehicle_id', $this->vehicleId)
+        // Walk back from $lastCharging through the connected charging block.
+        // Brief idle islands (<= 2 minutes between successive charging
+        // timestamps) are bridged so a transient state-detection drop —
+        // e.g. one Enable+power=0 reading 30s into an AC charge — doesn't
+        // truncate the session start. Mirrors the 2-minute gap tolerance in
+        // the batch reprocessor's accumulateSessionIds.
+        $gapMinutes = 2;
+        $candidateStates = VehicleState::where('vehicle_id', $this->vehicleId)
             ->where('state', 'charging')
-            ->where('timestamp', '>', $lookbackStart)
+            ->where('timestamp', '>=', $lastCharging->timestamp->copy()->subHours(24))
             ->where('timestamp', '<=', $this->endedAt)
             ->orderBy('timestamp')
             ->get();
 
-        if ($chargingStates->isEmpty()) {
+        if ($candidateStates->isEmpty()) {
             return;
         }
+
+        // Walk pairs from the end backwards. Session start is the first
+        // charging state whose predecessor is more than 2 minutes earlier
+        // (or the oldest state in the lookback window, if no such gap).
+        $sessionStartIdx = 0;
+        for ($i = $candidateStates->count() - 1; $i > 0; $i--) {
+            $gap = $candidateStates[$i - 1]->timestamp->diffInMinutes($candidateStates[$i]->timestamp);
+            if ($gap > $gapMinutes) {
+                $sessionStartIdx = $i;
+                break;
+            }
+        }
+
+        $chargingStates = $candidateStates->slice($sessionStartIdx)->values();
 
         $first = $chargingStates->first();
         $last = $chargingStates->last();
@@ -87,9 +98,15 @@ class ProcessChargeJob implements ShouldQueue
             return;
         }
 
-        // The transition state (first non-charging state after the session) often
-        // has the true final battery level, since the last charging state is recorded
-        // moments before the charger reports completion.
+        // The transition state (first non-charging state after the session)
+        // often has the true final battery level, since the last charging
+        // state is recorded moments before the charger reports completion
+        // and the battery can still creep up by ~0.1% during that window.
+        // But if the user unplugs and immediately drives away, the
+        // transition state is a driving state with a slightly *depleted*
+        // battery — without a clamp, that produces an incorrect (negative)
+        // energy_added_kwh. Clamp end values so they never decrease vs
+        // the last charging state's reading.
         $transitionState = VehicleState::where('vehicle_id', $this->vehicleId)
             ->where('timestamp', '>', $last->timestamp)
             ->where('timestamp', '<=', $last->timestamp->copy()->addMinutes(5))
@@ -97,9 +114,31 @@ class ProcessChargeJob implements ShouldQueue
             ->orderBy('timestamp')
             ->first();
 
-        $endBatteryLevel = $transitionState?->battery_level ?? $last->battery_level;
-        $endRatedRange = $transitionState?->rated_range ?? $last->rated_range;
-        $endEnergyRemaining = $transitionState?->energy_remaining ?? $last->energy_remaining;
+        $endBatteryLevel = $this->maxNonNull($transitionState?->battery_level, $last->battery_level);
+        $endRatedRange = $this->maxNonNull($transitionState?->rated_range, $last->rated_range);
+        $endEnergyRemaining = $this->maxNonNull($transitionState?->energy_remaining, $last->energy_remaining);
+
+        // Discard phantom sessions where the car briefly entered an active
+        // charge_state (e.g. 'Enable') during a handshake but no energy was
+        // actually transferred. Compare first vs last *charging* state — using
+        // the post-session transition state (which can be a driving state if
+        // the user drove away within 5 min) would risk a small real charge
+        // looking flat after a quick depletion. Both deltas must be known
+        // (non-null) and <= 0 to discard; if either is missing, we can't
+        // prove phantom and keep the session.
+        $batteryDelta = ($first->battery_level !== null && $last->battery_level !== null)
+            ? $last->battery_level - $first->battery_level
+            : null;
+        $energyDelta = ($first->energy_remaining !== null && $last->energy_remaining !== null)
+            ? $last->energy_remaining - $first->energy_remaining
+            : null;
+
+        $batteryFlat = $batteryDelta !== null && $batteryDelta <= 0;
+        $energyFlat = $energyDelta !== null && $energyDelta <= 0;
+
+        if ($batteryFlat && $energyFlat) {
+            return;
+        }
 
         // Check if there's a recent charge we should extend instead of creating a new one
         // (handles brief charging blips after the main charge completes)
@@ -216,6 +255,21 @@ class ProcessChargeJob implements ShouldQueue
         }
 
         ChargeCompleted::dispatch($vehicle, $charge);
+    }
+
+    /**
+     * Return the larger of two values, ignoring nulls. Returns null only
+     * when both inputs are null.
+     */
+    private function maxNonNull(?float $a, ?float $b): ?float
+    {
+        if ($a === null) {
+            return $b;
+        }
+        if ($b === null) {
+            return $a;
+        }
+        return max($a, $b);
     }
 
     /**
