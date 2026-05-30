@@ -14,7 +14,7 @@ class BatteryHealthFactory extends Factory
     {
         return [
             'vehicle_id' => Vehicle::factory(),
-            'recorded_at' => fake()->unique()->dateTimeBetween('-1 year', 'now')->format('Y-m-d'),
+            'recorded_at' => now()->subDays(fake()->unique()->numberBetween(0, 3650))->format('Y-m-d'),
             'battery_level' => fake()->numberBetween(70, 100),
             'rated_range' => fake()->randomFloat(1, 200, 310),
             'ideal_range' => fake()->randomFloat(1, 220, 340),
