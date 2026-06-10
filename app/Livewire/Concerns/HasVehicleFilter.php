@@ -12,10 +12,10 @@ trait HasVehicleFilter
 
     protected function getVehicleIds()
     {
-        $user = Auth::user();
+        $owned = Auth::user()->vehicles()->pluck('id');
 
         return $this->vehicleFilter
-            ? collect([(int) $this->vehicleFilter])
-            : $user->vehicles()->pluck('id');
+            ? $owned->intersect([(int) $this->vehicleFilter])->values()
+            : $owned;
     }
 }
