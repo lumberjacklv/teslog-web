@@ -2,20 +2,12 @@
 
 namespace App\Livewire\Concerns;
 
-use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Url;
 
 trait HasVehicleFilter
 {
+    use ResolvesVehicleFilter;
+
     #[Url]
     public string $vehicleFilter = '';
-
-    protected function getVehicleIds()
-    {
-        $owned = Auth::user()->vehicles()->pluck('id');
-
-        return $this->vehicleFilter
-            ? $owned->intersect([(int) $this->vehicleFilter])->values()
-            : $owned;
-    }
 }

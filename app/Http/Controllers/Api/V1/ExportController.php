@@ -15,11 +15,11 @@ class ExportController extends Controller
 {
     /**
      * Neutralize spreadsheet formula injection: a cell beginning with
-     * = + - @ (or tab/CR) is treated as a formula by Excel/Sheets.
+     * = + - @ (or tab/CR/LF) is treated as a formula by Excel/Sheets.
      */
     private function csvSafe($value)
     {
-        if (is_string($value) && $value !== '' && str_contains("=+-@\t\r", $value[0])) {
+        if (is_string($value) && $value !== '' && str_contains("=+-@\t\r\n", $value[0])) {
             return "'".$value;
         }
 
