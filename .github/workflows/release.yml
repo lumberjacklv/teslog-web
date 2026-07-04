@@ -35,6 +35,7 @@ jobs:
   build-and-release:
     needs: test
     runs-on: ubuntu-latest
+    environment: Release
     steps:
       - uses: actions/checkout@v4
 
