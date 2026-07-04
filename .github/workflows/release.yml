@@ -2,7 +2,7 @@ name: Release
 
 on:
   push:
-    tags: ['v*']
+    tags: ["v*"]
 
 permissions:
   contents: write
@@ -17,7 +17,7 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.3'
+          php-version: "8.3"
           extensions: pdo_sqlite, mbstring, zip, bcmath, intl, pcntl
           coverage: none
 
@@ -59,8 +59,8 @@ jobs:
           file: docker/app/Dockerfile
           push: true
           tags: |
-            ghcr.io/steveneppler/teslog-web:${{ steps.version.outputs.VERSION }}
-            ghcr.io/steveneppler/teslog-web:latest
+            ${{ vars.GHCR_REGISTRY }}:${{ steps.version.outputs.VERSION }}
+            ${{ vars.GHCR_REGISTRY }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
