@@ -4,6 +4,7 @@ RUN apk add --no-cache \
     nginx \
     supervisor \
     sqlite-dev \
+    postgresql-dev \
     icu-dev \
     oniguruma-dev \
     libzip-dev \
@@ -17,6 +18,7 @@ RUN apk add --no-cache \
 RUN docker-php-ext-install \
     pdo_sqlite \
     pdo_mysql \
+    pdo_pgsql \
     intl \
     mbstring \
     zip \
