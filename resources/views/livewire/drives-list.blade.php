@@ -275,9 +275,8 @@
                         window.__summaryMapLayers.clearLayers();
                     }
                 } else {
-                    window.__summaryMapInstance = L.map(el, { attributionControl: false, zoomControl: true });
-                    L.tileLayer(window.getMapTileUrl(), { maxZoom: 19 }).addTo(window.__summaryMapInstance);
-                    window.registerMap(window.__summaryMapInstance);
+                    window.__summaryMapInstance = L.map(el, { zoomControl: true });
+                    window.addBaseTileLayer(window.__summaryMapInstance);
                     window.setupMapScrollZoom(window.__summaryMapInstance);
                     window.__summaryMapLayers = L.layerGroup().addTo(window.__summaryMapInstance);
                 }
@@ -305,9 +304,8 @@
                     if (!routes || routes.length === 0) return;
                     var el = document.getElementById('day-map-' + date);
                     if (!el) return;
-                    var map = L.map(el, { attributionControl: false, zoomControl: false, scrollWheelZoom: false, dragging: false, doubleClickZoom: false, touchZoom: false });
-                    L.tileLayer(window.getMapTileUrl(), { maxZoom: 19 }).addTo(map);
-                    window.registerMap(map);
+                    var map = L.map(el, { zoomControl: false, scrollWheelZoom: false, dragging: false, doubleClickZoom: false, touchZoom: false });
+                    window.addBaseTileLayer(map);
                     var allBounds = [];
                     routes.forEach(function(route) {
                         var latlngs = route.coords.map(function(c) { return [c[0], c[1]]; });

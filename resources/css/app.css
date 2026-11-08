@@ -101,6 +101,18 @@
     z-index: 0 !important;
 }
 
+/* Compact, theme-aware tile attribution */
+.leaflet-container .leaflet-control-attribution {
+    font-size: 9px;
+    line-height: 1.4;
+    padding: 0 4px;
+    background: color-mix(in srgb, var(--theme-surface) 70%, transparent);
+    color: var(--theme-text-muted);
+}
+.leaflet-container .leaflet-control-attribution a {
+    color: var(--theme-text-secondary);
+}
+
 @theme {
     --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
