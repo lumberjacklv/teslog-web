@@ -210,9 +210,8 @@
             __overviewMap = null;
         }
 
-        var map = L.map(el, { attributionControl: false });
-        L.tileLayer(window.getMapTileUrl(), { maxZoom: 19 }).addTo(map);
-        window.registerMap(map);
+        var map = L.map(el);
+        window.addBaseTileLayer(map);
         window.setupMapScrollZoom(map);
 
         var bounds = [];
@@ -257,9 +256,8 @@
         __editRadius = radius;
         var zoom = hasLocation ? 16 : 4;
 
-        var map = L.map(el, { attributionControl: false });
-        L.tileLayer(window.getMapTileUrl(), { maxZoom: 19 }).addTo(map);
-        window.registerMap(map);
+        var map = L.map(el);
+        window.addBaseTileLayer(map);
         map.setView([lat, lng], zoom);
 
         function setMarker(lat, lng, r) {
